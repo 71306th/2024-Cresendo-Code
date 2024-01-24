@@ -22,11 +22,11 @@ import frc.robot.Constants;
 public class SuperStructure extends SubsystemBase {
 
   private Vision m_vision;
+  private Controller m_controller;
 
   private final XboxController driver;
   private final XboxController operator;
 
-  private SlewRateLimiter translationLimiter = new SlewRateLimiter(3.0);
   private SlewRateLimiter strafeLimiter = new SlewRateLimiter(3.0);
   
   private final WPI_TalonFX tilter;
@@ -67,21 +67,27 @@ public class SuperStructure extends SubsystemBase {
   private double tilterGoalAngle;
   private double intakeUCurrentSpeed;
   private double intakeUGoalSpeed;
+  private boolean angleOK = false;
+  private boolean speedOK = false;
 
   private InputStates CommandState;
   private TilterStates TilterState;
   private IntakeStates IntakeState;
 
   /* Distance calculating(it's too annoying) */
-  double TagToTilterx = m_vision.TagToBotCenter().getX() + Constants.SuperStructure.TilterToBotCenter.getX();
-  double TagToTiltery = m_vision.TagToBotCenter().getY() + Constants.SuperStructure.TilterToBotCenter.getY();
-  double TagToTilterz = m_vision.TagToBotCenter().getZ() + Constants.SuperStructure.TilterToBotCenter.getZ();
+  double TagToTilterx = m_vision.getTagToBotCenter().getX() + Constants.SuperStructure.TilterToBotCenter.getX();
+  double TagToTiltery = m_vision.getTagToBotCenter().getY() + Constants.SuperStructure.TilterToBotCenter.getY();
+  double TagToTilterz = m_vision.getTagToBotCenter().getZ() + Constants.SuperStructure.TilterToBotCenter.getZ();
+  double XYDis = Math.sqrt(Math.pow(TagToTilterx, 2) + Math.pow(TagToTiltery, 2));
+  double XYZDis = Math.sqrt((Math.pow(TagToTilterx, 2) + Math.pow(TagToTiltery, 2) + Math.pow(TagToTilterz, 2)));
 
   public SuperStructure() {
     tilter = new WPI_TalonFX(Constants.SuperStructure.tilterID);
     floor = new CANSparkMax(Constants.SuperStructure.floorMotorID, MotorType.kBrushed);
     uppermaster = new CANSparkMax(Constants.SuperStructure.uppermasterMotorID, MotorType.kBrushless);
     upperslave = new CANSparkMax(Constants.SuperStructure.upperslaveMotorID, MotorType.kBrushless);
+
+    tilter.setSelectedSensorPosition(0);
     
     upperslave.follow(uppermaster, false);
 
@@ -94,12 +100,13 @@ public class SuperStructure extends SubsystemBase {
     TilterState = TilterStates.idle;
     IntakeState = IntakeStates.idle;
 
-    driver = new XboxController(Constants.JoystickConstants.kDriverControllerPort);
-    operator = new XboxController(Constants.JoystickConstants.kOperatorControllerPort);
+    driver = m_controller.getDriverController();
+    operator = m_controller.getOperatorController();
   }
 
   @Override
   public void periodic() {
+    if(limitSwitch.get()) resetTilterEncoder();
     tilterCurrentAngle = getTilterDegrees();
     intakeUCurrentSpeed = getIntakeVelocity();
     updateOverallStates();
@@ -112,6 +119,8 @@ public class SuperStructure extends SubsystemBase {
     SmartDashboard.putString("Input State", CommandState.toString());
     SmartDashboard.putNumber("Tilter Current Angle", tilterCurrentAngle);
     SmartDashboard.putNumber("Intake Current Speed", intakeUCurrentSpeed);
+    SmartDashboard.putBoolean("Angle Adjustable", angleOK);
+    SmartDashboard.putBoolean("Speed Adjustable", speedOK);
   }
 
   /* EZ settings */
@@ -131,6 +140,10 @@ public class SuperStructure extends SubsystemBase {
     CommandState = state;
   }
 
+  public void resetTilterEncoder() {
+    tilter.setSelectedSensorPosition(0);
+  }
+
 
   /* Head-Exploding fetches */
   public double getTilterDegrees() {
@@ -145,29 +158,36 @@ public class SuperStructure extends SubsystemBase {
     return CommandState;
   }
 
+  public boolean getAngleOK() {
+    return angleOK;
+  }
+
+  public boolean getSpeedOK() {
+    return speedOK;
+  }
+
   public double getSpeakerToUIntake() {
     if(m_vision.getID() == 4 || m_vision.getID() == 7){
       return Math.sqrt(
         Math.pow(TagToTilterx + (Constants.SuperStructure.IntakeMToTilter / Math.cos(Constants.SuperStructure.IntakeUToTilterAngle)) * Math.cos(tilterCurrentAngle), 2) +
         Math.pow(TagToTiltery, 2) +
         Math.pow(TagToTilterz + (Constants.SuperStructure.IntakeMToTilter / Math.cos(Constants.SuperStructure.IntakeUToTilterAngle)) * Math.sin(tilterCurrentAngle) + Constants.Vision.SpeakerIDToSpeakerZ, 2)
-      ) / Math.cos(m_vision.TagToBotCenter().getRotation().getAngle() * Math.PI / 180);
+      ) / Math.cos(m_vision.getTagToBotCenter().getRotation().getAngle() * Math.PI / 180);
     }else if(m_vision.getID() == 3 || m_vision.getID() == 8){
       return Math.sqrt(
         Math.pow(TagToTilterx + (Constants.SuperStructure.IntakeMToTilter / Math.cos(Constants.SuperStructure.IntakeUToTilterAngle)) * Math.cos(tilterCurrentAngle), 2)+
         Math.pow(TagToTiltery + Constants.Vision.SpeakerIDToSpeakerY, 2)+
         Math.pow(TagToTilterz + (Constants.SuperStructure.IntakeMToTilter / Math.cos(Constants.SuperStructure.IntakeUToTilterAngle)) * Math.sin(tilterCurrentAngle) + Constants.Vision.SpeakerIDToSpeakerZ, 2)
-      ) / Math.cos(m_vision.TagToBotCenter().getRotation().getAngle() * Math.PI / 180);
+      ) / Math.cos(m_vision.getTagToBotCenter().getRotation().getAngle() * Math.PI / 180);
     }else return 0;
   } // need review, not sure it's right or not
 
   /* OH GOD PLEASE NO MY BRAIN'S DYING calculations */
   public double calculatingTilterAngle() {
-    double theta = Math.acos(
-      (Math.sqrt(Math.pow(TagToTilterx, 2) + Math.pow(TagToTiltery, 2))) / TagToTilterz);
-    double phi = Math.acos(
-      (Constants.SuperStructure.IntakeMToTilter) / 
-      Math.sqrt((Math.pow(TagToTilterx, 2) + Math.pow(TagToTiltery, 2) + Math.pow(TagToTilterz, 2))));
+    double a = Constants.SuperStructure.IntakeMToTilter;
+    double b = XYZDis;
+    double theta = Math.acos(XYDis / XYZDis);
+    double phi = Math.acos(Math.abs((3*Math.pow(a, 2)+a*Math.sqrt(4*Math.pow(b, 2)-3*Math.pow(a, 2))) / 4*a*b)); // law of cosine but changed very much
     double output = 180-theta-phi;
     if(90-output < Constants.SuperStructure.restrictedLowShootingAngle) return -1;
     else return (output);
@@ -223,7 +243,8 @@ public class SuperStructure extends SubsystemBase {
   public void updateTilterStates() {
     switch(TilterState) {
       case auto:
-        setTilterSpeed(MathUtility.clamp(tilterPID.calculate(tilterGoalAngle - tilterCurrentAngle), -0.3, 0.3));
+        if(tilterGoalAngle != -1) {setTilterSpeed(MathUtility.clamp(tilterPID.calculate(Constants.SuperStructure.TilterIdle - tilterCurrentAngle), -0.3, 0.3)); angleOK = false;}
+        else {setTilterSpeed(MathUtility.clamp(tilterPID.calculate(tilterGoalAngle - tilterCurrentAngle), -0.3, 0.3)); angleOK = true;}
         break;
       case human:
         setTilterSpeed(MathUtility.clamp(tilterPID.calculate(Constants.SuperStructure.TilterHumanIntake - tilterCurrentAngle), -0.3, 0.3));
@@ -235,7 +256,7 @@ public class SuperStructure extends SubsystemBase {
         setTilterSpeed(MathUtility.clamp(tilterPID.calculate(Constants.SuperStructure.TilterPodiumToSpeaker - tilterCurrentAngle), -0.3, 0.3));
         break;
       case idle:
-        setTilterSpeed(MathUtility.clamp(tilterPID.calculate(Constants.SuperStructure.TilterIdle), -0.3, 0.3));
+        setTilterSpeed(MathUtility.clamp(tilterPID.calculate(Constants.SuperStructure.TilterIdle - tilterCurrentAngle), -0.3, 0.3));
         break;
     }
   }
@@ -243,8 +264,8 @@ public class SuperStructure extends SubsystemBase {
   public void updateIntakeStates() {
     switch(IntakeState) {
       case auto:
-        if(intakeUGoalSpeed != -1) setUIntakeSpeed(MathUtility.clamp(flywheelPID.calculate(intakeUGoalSpeed - intakeUCurrentSpeed), -1, 1));
-        else setUIntakeSpeed(MathUtility.clamp(flywheelPID.calculate(Constants.SuperStructure.IntakeIdle - intakeUCurrentSpeed), -1, 1));
+        if(intakeUGoalSpeed != -1) {setUIntakeSpeed(MathUtility.clamp(flywheelPID.calculate(intakeUGoalSpeed - intakeUCurrentSpeed), -1, 1)); speedOK = false;}
+        else {setUIntakeSpeed(MathUtility.clamp(flywheelPID.calculate(Constants.SuperStructure.IntakeIdle - intakeUCurrentSpeed), -1, 1)); speedOK = true;}
         break;
       case human:
         setUIntakeSpeed(MathUtility.clamp(flywheelPID.calculate(Constants.SuperStructure.HumanIntake - intakeUCurrentSpeed), -1, 1));

@@ -18,6 +18,8 @@ import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.ChenryLib.MathUtility;
+import frc.ChenryLib.PID;
 import frc.robot.Constants;
 
 public class Swerve extends SubsystemBase {
@@ -25,8 +27,12 @@ public class Swerve extends SubsystemBase {
 
   private SwerveDriveOdometry swerveOdometry;
   public SwerveModule[] mSwerveMods;
+  private Vision m_vision;
 
   private Field2d field;
+
+  private final PID adjustMidPID;
+  private final PID adjustSidePID;
 
   public Swerve() {
     gyro = new WPI_Pigeon2(Constants.Swerve.pigeon, "7130");
@@ -43,7 +49,12 @@ public class Swerve extends SubsystemBase {
           new SwerveModule(3, Constants.Swerve.Mod3.constants)
         };
 
+    m_vision = new Vision();
+
     field = new Field2d();
+
+    adjustMidPID = new PID(0, 0, 0, 0, 0);
+    adjustSidePID = new PID(0, 0, 0, 0, 0);
   }
 
   public static SwerveModulePosition[] pos = {
@@ -114,6 +125,22 @@ public class Swerve extends SubsystemBase {
 
   public void selectTab(String tab) {
     Shuffleboard.selectTab(tab);
+  }
+
+  public double calculateAutoFacing() {
+    if(m_vision.getID() == 4 || m_vision.getID() == 7){
+      double RotationVal = MathUtility.clamp(
+      adjustMidPID.calculate(m_vision.getHorizontalDerivation()), 
+      Constants.Swerve.slow ? -Math.pow(Constants.Swerve.slowRegulator, 2) : -Constants.Swerve.slowRegulator, 
+      Constants.Swerve.slow ? Math.pow(Constants.Swerve.slowRegulator, 2) : Constants.Swerve.slowRegulator);
+      return RotationVal;
+    } else if(m_vision.getID() == 3 || m_vision.getID() == 8) {
+      double RotationVal = MathUtility.clamp(
+      adjustSidePID.calculate(m_vision.getHorizontalDerivation()), 
+      Constants.Swerve.slow ? -Math.pow(Constants.Swerve.slowRegulator, 2) : -Constants.Swerve.slowRegulator, 
+      Constants.Swerve.slow ? Math.pow(Constants.Swerve.slowRegulator, 2) : Constants.Swerve.slowRegulator);
+      return RotationVal;
+    } else return 0;
   }
 
   @Override

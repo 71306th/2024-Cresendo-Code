@@ -6,14 +6,11 @@ package frc.robot.subsystems;
 
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation3d;
-import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.networktables.BooleanArrayPublisher;
 import edu.wpi.first.networktables.DoubleArraySubscriber;
-import edu.wpi.first.networktables.DoublePublisher;
 import edu.wpi.first.networktables.DoubleSubscriber;
 import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -70,11 +67,16 @@ public class Vision extends SubsystemBase {
     SmartDashboard.putNumberArray("LimelightToTarget", coordinateArr);
   }
 
+  /* fetches */
   public double getID() {
     return id;
   }
 
-  public Pose3d TagToBotCenter() {
+  public double getHorizontalDerivation() {
+    return x;
+  }
+
+  public Pose3d getTagToBotCenter() {
     Translation3d translation3d = new Translation3d(
     coordinateArr[0]+Constants.Vision.CameraToBotCenter.getX(), 
     coordinateArr[1]+Constants.Vision.CameraToBotCenter.getY(), 
@@ -86,6 +88,7 @@ public class Vision extends SubsystemBase {
     return new Pose3d(translation3d, rotation3d);
   }
 
+  /* settings */
   public void setLEDMode(int command){
     switch(command){
       case 0:

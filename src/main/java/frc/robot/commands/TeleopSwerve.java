@@ -6,11 +6,16 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.CommandBase;
 import frc.robot.Constants;
+import frc.robot.subsystems.Controller;
 import frc.robot.subsystems.Swerve;
+import frc.robot.subsystems.Vision;
 
 public class TeleopSwerve extends CommandBase {
-  private Swerve s_Swerve;
-  // private Joystick controller;
+
+  private final Vision m_vision;
+  private final Swerve s_Swerve;
+  private final Controller m_controller;
+  
   private XboxController driver;
 
   private SlewRateLimiter translationLimiter = new SlewRateLimiter(3.0);
@@ -24,10 +29,14 @@ public class TeleopSwerve extends CommandBase {
   private double strafeVal;
   private double rotationVal;
 
-  public TeleopSwerve(Swerve s_Swerve) {
+  public TeleopSwerve(Vision m_vision, Swerve s_Swerve, Controller m_controller) {
+    this.m_vision = m_vision;
+    addRequirements(m_vision);
     this.s_Swerve = s_Swerve;
     addRequirements(s_Swerve);
-    driver = new XboxController(Constants.JoystickConstants.kDriverControllerPort);
+    this.m_controller = m_controller;
+    addRequirements(m_controller);
+    driver = m_controller.getDriverController();
   }
 
   @Override
@@ -40,19 +49,27 @@ public class TeleopSwerve extends CommandBase {
       strafeVal =
           strafeLimiter.calculate(
               MathUtil.applyDeadband(driver.getLeftX() * Constants.Swerve.slowRegulator, Constants.Swerve.axisDeadBand));
-      rotationVal =
-          rotationLimiter.calculate(
-              MathUtil.applyDeadband(driver.getRightX() * Math.pow(Constants.Swerve.slowRegulator, 2), Constants.Swerve.axisDeadBand));
+      if(Constants.SuperStructure.isAuto && (m_vision.getID() == 4 || m_vision.getID() == 7 || m_vision.getID() == 3 || m_vision.getID() == 8)) {
+          rotationVal = s_Swerve.calculateAutoFacing();
+      } else {
+          rotationVal =
+              rotationLimiter.calculate(
+                  MathUtil.applyDeadband(driver.getRightX() * Math.pow(Constants.Swerve.slowRegulator, 2), Constants.Swerve.axisDeadBand));
+      }
     } else {
       translationVal =
           translationLimiter.calculate(
               MathUtil.applyDeadband(driver.getLeftY(), Constants.Swerve.axisDeadBand));
       strafeVal =
           strafeLimiter.calculate(
-              MathUtil.applyDeadband(driver.getLeftX(), Constants.Swerve.axisDeadBand));        
-      rotationVal =
-          rotationLimiter.calculate(
-              MathUtil.applyDeadband(driver.getRightX() * Constants.Swerve.slowRegulator, Constants.Swerve.axisDeadBand));
+              MathUtil.applyDeadband(driver.getLeftX(), Constants.Swerve.axisDeadBand));
+      if(Constants.SuperStructure.isAuto && (m_vision.getID() == 4 || m_vision.getID() == 7 || m_vision.getID() == 3 || m_vision.getID() == 8)){
+          rotationVal = s_Swerve.calculateAutoFacing();
+      } else {
+          rotationVal =
+              rotationLimiter.calculate(
+                  MathUtil.applyDeadband(driver.getRightX() * Constants.Swerve.slowRegulator, Constants.Swerve.axisDeadBand));
+      }
     }
     
     if (driver.getLeftBumperPressed() && onePress1==false) {
