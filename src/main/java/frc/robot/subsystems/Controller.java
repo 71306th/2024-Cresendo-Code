@@ -10,22 +10,27 @@ import frc.robot.Constants;
 
 public class Controller extends SubsystemBase {
   
-  public final XboxController driver;
-  public final XboxController operator;
+  public XboxController driver = null;
+  public XboxController operator = null;
 
-  public Controller() {
-    driver = new XboxController(Constants.JoystickConstants.kDriverControllerPort);
-    operator = new XboxController(Constants.JoystickConstants.kOperatorControllerPort);
-  }
+  public Controller() {}
 
   @Override
   public void periodic() {}
 
   public XboxController getDriverController() {
+    if (driver == null) {
+      driver = new XboxController(Constants.JoystickConstants.kDriverControllerPort);
+    }
+
     return driver;
   }
 
   public XboxController getOperatorController() {
+    if (operator == null) {
+      operator = new XboxController(Constants.JoystickConstants.kOperatorControllerPort);
+    }
+
     return operator;
   }
 }
